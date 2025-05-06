@@ -1,10 +1,10 @@
 from fastapi import Cookie, HTTPException, status, Depends
-from typing import Annotated, Dict, Any # For type hinting
+from typing import Annotated, Dict, Any, Optional # For type hinting
 
 from core.session import verify_cookie
 from core.db import con, cur # Import shared connection and cursor
 
-def get_current_user(gibsey_sid: Annotated[str | None, Cookie()] = None) -> Dict[str, Any]:
+def get_current_user(gibsey_sid: Annotated[Optional[str], Cookie()] = None) -> Dict[str, Any]:
     """
     FastAPI dependency to get the current authenticated user based on the session cookie.
     Raises HTTPException with 401 status if authentication fails.
