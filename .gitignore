@@ -7,8 +7,8 @@ __pycache__/
 *.pyo
 *.pyd
 
-# SQLite database file (if you decide not to commit it eventually)
-# gibsey.db
+# SQLite database file
+gibsey.db
 
 # OS-specific files
 .DS_Store
