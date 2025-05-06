@@ -1,16 +1,83 @@
-# Day 1 — Auth Stub (≈ 90 min)
+# Day 1 — Auth Stub (≈ 90 min)
 
-**Goal:** let a book‑club reader land on `/login`, enter an email, and receive a session cookie so every subsequent request carries `user_id`.
+**Goal:** let a book-club reader land on `/login`, enter an email, and receive a session cookie so every subsequent request carries `user_id`.
 
-## 0. Prereqs (5 min)
+## 0. Prereqs (revised - budget extra 15-20 min for first-time setup)
 
-```bash
-pip install fastapi[all] itsdangerous passlib[bcrypt] python-multipart
+### A. Environment Setup (First time only)
+
+It's crucial to set up a proper development environment. This includes version control for your project files and a virtual environment for Python dependencies.
+
+1.  **Initialize Git Repository (if not already done)**:
+    If you haven't, initialize a Git repository in your project root, make an initial commit, and connect it to a remote repository (e.g., on GitHub).
+
+2.  **Create `.gitignore**:**
+    Create a `.gitignore` file in the project root to prevent committing unnecessary files (like the virtual environment directory, Python cache, OS-specific files).
+    Example `\.gitignore` content:
+    ```gitignore
+    # Python virtual environment
+    .venv/
+    venv/
+    */.venv/
+    */venv/
+
+    # Python cache files
+    __pycache__/
+    *.pyc
+    *.pyo
+    *.pyd
+
+    # Editor/IDE specific
+    .vscode/
+    .idea/
+
+    # OS-specific
+    .DS_Store
+    Thumbs.db
+    ```
+    Commit this file: `git add .gitignore && git commit -m "Add .gitignore"`
+
+3.  **Create and Activate Python Virtual Environment**:
+    Using a virtual environment is highly recommended to manage project dependencies and avoid conflicts with system-wide Python packages.
+    ```bash
+    # Ensure you are in the project root directory
+    python3 -m venv .venv  # Creates a virtual environment named '.venv'
+    source .venv/bin/activate # Activates the environment (for bash/zsh on macOS/Linux)
+    # For Windows: .venv\Scripts\activate
+    ```
+    Your terminal prompt should now typically show `(.venv)` at the beginning, indicating the virtual environment is active.
+
+4.  **(Optional but Recommended) Configure Shell PATH for User-Installed Python Scripts**:
+    To make Python scripts installed via `pip install --user` (outside a venv) generally accessible (e.g., `uvicorn`, `pip` itself if installed this way), add the user script directory to your shell's PATH. For Zsh on macOS (using `/Users/ghostradongus` as an example home directory):
+    *   Edit `~/.zshrc` (e.g., `nano ~/.zshrc`).
+    *   Add the line: `export PATH="$HOME/Library/Python/3.9/bin:$PATH"` (adjust Python version if needed).
+    *   Save the file and run `source ~/.zshrc` in your terminal for the change to take effect in the current session.
+    *   *Note: When the virtual environment (`.venv`) is active, its script directory takes precedence, which is the desired behavior for project-specific tools.*
+
+### B. Install Python Dependencies
+
+Once your virtual environment is active (you see `(.venv)` in your prompt), install the required Python packages.
+
+First, create/update `requirements.txt` in your project root with the following content:
+```txt
+fastapi[all]==0.115.12 # Or your desired/latest version
+itsdangerous==2.2.0
+passlib[bcrypt]==1.7.4
+python-multipart==0.0.20
 ```
 
-Add to `requirements.txt`.
+Then, install these dependencies:
+```bash
+# Ensure pip is up-to-date within the venv (good practice)
+python -m pip install --upgrade pip
 
-## 1. Create users table (10 min)
+# Install project dependencies from requirements.txt
+pip install -r requirements.txt
+```
+
+*(The original Day 1 plan listed individual pip install commands. Using `requirements.txt` is generally preferred for managing dependencies consistently.)*
+
+## 1. Create users table (10 min)
 
 `core/db.py`
 
@@ -38,7 +105,7 @@ Call once:
 python -m core.db
 ```
 
-## 2. Session signer (5 min)
+## 2. Session signer (5 min)
 
 `core/session.py`
 
@@ -58,7 +125,7 @@ def verify_cookie(cookie: str) -> int | None:
         return None
 ```
 
-## 3. `/login` API route (20 min)
+## 3. `/login` API route (20 min)
 
 `api/routes/auth.py`
 
@@ -80,10 +147,10 @@ def login(email: str = Form(...), name: str = Form("Reader"), resp: Response = R
     return {"ok": True, "user_id": user_id}
 ```
 
-*No password; later swap for magic‑link mailer.*
+*No password; later swap for magic-link mailer.*
 Add router to `main.py`.
 
-## 4. Auth dependency (10 min)
+## 4. Auth dependency (10 min)
 
 `core/auth.py`
 
@@ -113,7 +180,7 @@ def ask(q: AskIn, user=Depends(current_user)):
     credit(user["id"], +1, "ask_question")
 ```
 
-## 5. Minimal login HTML (15 min)
+## 5. Minimal login HTML (15 min)
 
 `frontend/Login.jsx`
 
@@ -145,20 +212,20 @@ export default function Login() {
 }
 ```
 
-*Assumes Vite/React setup; route `/reader` will come Day 2.*
+*Assumes Vite/React setup; route `/reader` will come Day 2.*
 
-## 6. Smoke test (10 min)
+## 6. Smoke test (10 min)
 
 ```bash
 uvicorn main:app --reload
 ```
 
 * Visit `http://localhost:8000/login` (serve static via FastAPI or dev server).
-* Submit email → check browser **DevTools › Cookies**: `gibsey_sid`.
+* Submit email → check browser **DevTools › Cookies**: `gibsey_sid`.
 * `sqlite3 gibsey.db "SELECT * FROM users;"` → one row.
 * Hit a protected endpoint without cookie → **401**.
 
-## 7. Commit (5 min)
+## 7. Commit (5 min)
 
 ```bash
 git add .
@@ -168,6 +235,6 @@ git push origin feat/bookclub-auth
 
 ---
 
-You now have per‑user identity.
-Tomorrow we’ll serve pages and wire the React reader.
+You now have per-user identity.
+Tomorrow we'll serve pages and wire the React reader.
 *Brick laid—rest up, next brick awaits.*
