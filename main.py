@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Depends
 from api.routes import auth as auth_router
+from api.routes import pages as pages_router
 from core.auth import get_current_user
 from typing import Dict, Any
 # We will add other routers here as we build them (pages, me, vault, etc.)
@@ -12,6 +13,7 @@ app = FastAPI(
 
 # Include routers
 app.include_router(auth_router.router, prefix="/api/v1", tags=["Authentication"])
+app.include_router(pages_router.router, prefix="/api/v1", tags=["Pages"])
 
 @app.get("/api/v1/users/me", tags=["Users"], response_model=Dict[str, Any])
 async def read_users_me(current_user: Dict[str, Any] = Depends(get_current_user)):
