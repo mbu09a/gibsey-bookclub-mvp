@@ -1,0 +1,4 @@
+fastapi[all]==0.115.12
+itsdangerous==2.2.0
+passlib[bcrypt]==1.7.4
+python-multipart==0.0.20 
