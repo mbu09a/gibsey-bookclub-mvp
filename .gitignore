@@ -1,0 +1,15 @@
+# Python virtual environment
+.venv/
+
+# Python cache files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# SQLite database file (if you decide not to commit it eventually)
+# gibsey.db
+
+# OS-specific files
+.DS_Store
+Thumbs.db 
