@@ -19,9 +19,3 @@ code {
 }
 
 /* Remove empty .citation-link as Tailwind classes are applied in component */
-
-#root {
-  /* min-height: 100vh; */
-  /* display: flex; */
-  /* flex-direction: column; */
-}
