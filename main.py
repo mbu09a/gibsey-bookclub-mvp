@@ -5,6 +5,7 @@ from api.routes import pages as pages_router
 from api.routes import ask as ask_router
 from api.routes import me as me_router
 from api.routes import vault as vault_router
+from api.routes import ledger as ledger_router
 from core.auth import get_current_user
 from typing import Dict, Any
 # We will add other routers here as we build them (pages, me, vault, etc.)
@@ -36,6 +37,7 @@ app.include_router(pages_router.router, prefix="/api/v1", tags=["Pages"])
 app.include_router(ask_router.router, prefix="/api/v1", tags=["Ask the Guide"])
 app.include_router(me_router.router, prefix="/api/v1/users", tags=["Users"])
 app.include_router(vault_router.router, prefix="/api/v1/vault", tags=["Vault"])
+app.include_router(ledger_router.router, prefix="/api/v1", tags=["Ledger"])
 
 @app.get("/health", tags=["Server Health"])
 async def health_check():
