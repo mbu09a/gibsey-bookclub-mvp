@@ -10,7 +10,7 @@ print("Starting index build...")
 
 # Define project root assuming this script is in /scripts/
 PROJECT_ROOT = pathlib.Path(__file__).parent.parent
-DATA_JSON = PROJECT_ROOT / "data" / "pages_100w.json"
+DATA_JSON = PROJECT_ROOT / "data" / "pages_710.json"
 INDEX_FILE = PROJECT_ROOT / "data" / "page_vectors.faiss"
 META_FILE = PROJECT_ROOT / "data" / "page_meta.pkl"
 OLLAMA_API = "http://localhost:11434/api/embeddings"

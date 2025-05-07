@@ -7,10 +7,11 @@ from core.auth import get_current_user # For authentication
 
 router = APIRouter()
 
-# Load page data when the module is imported
-DATA_FILE = pathlib.Path(__file__).parent.parent.parent / "data" / "pages_100w.json"
+# Load page data when the module is imported - NOW FROM pages_710.json
+DATA_FILE = pathlib.Path(__file__).parent.parent.parent / "data" / "pages_710.json" # <--- UPDATED FILENAME
 PAGES_LIST: List[Dict[str, Any]] = []
 PAGES_DICT: Dict[int, Dict[str, Any]] = {}
+MAX_PAGE_ID = 0 # Initialize
 
 try:
     with DATA_FILE.open("r", encoding="utf-8") as f:
@@ -19,19 +20,20 @@ try:
             if "id" in page:
                 PAGES_DICT[page["id"]] = page
             else:
-                print(f"Warning: Page missing 'id': {page.get('title', 'Untitled')}")
+                print(f"Warning: Page missing 'id' in {DATA_FILE}: {page.get('title', 'Untitled')}")
     if not PAGES_LIST:
         print(f"Warning: {DATA_FILE} was loaded but is empty or contains no valid pages.")
     else:
-        print(f"Successfully loaded {len(PAGES_LIST)} pages from {DATA_FILE}")
+        MAX_PAGE_ID = len(PAGES_LIST) # Correctly set MAX_PAGE_ID based on loaded pages
+        # Alternatively, if IDs are not guaranteed sequential from 1 to N:
+        # MAX_PAGE_ID = max(PAGES_DICT.keys()) if PAGES_DICT else 0
+        print(f"Successfully loaded {len(PAGES_LIST)} pages (Max ID: {MAX_PAGE_ID}) from {DATA_FILE}")
 except FileNotFoundError:
-    print(f"ERROR: Page data file not found at {DATA_FILE}. Please run scripts/build_pages.py")
+    print(f"ERROR: Page data file not found at {DATA_FILE}.")
 except json.JSONDecodeError:
     print(f"ERROR: Could not decode JSON from {DATA_FILE}.")
 except Exception as e:
-    print(f"ERROR: An unexpected error occurred while loading pages: {e}")
-
-MAX_PAGE_ID = len(PAGES_LIST)
+    print(f"ERROR: An unexpected error occurred while loading pages from {DATA_FILE}: {e}")
 
 @router.get("/page/{page_id}", response_model=Dict[str, Any])
 async def get_page(

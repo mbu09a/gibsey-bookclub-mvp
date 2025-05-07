@@ -20,7 +20,7 @@ EMBED_MODEL = "nomic-embed-text"
 GENERATION_MODEL = "llama3" # Assumes llama3 is pulled via ollama
 
 PROJECT_ROOT = pathlib.Path(__file__).resolve().parent.parent.parent
-DATA_JSON_PATH = PROJECT_ROOT / "data" / "pages_100w.json"
+DATA_JSON_PATH = PROJECT_ROOT / "data" / "pages_710.json"
 INDEX_PATH = PROJECT_ROOT / "data" / "page_vectors.faiss"
 META_PATH = PROJECT_ROOT / "data" / "page_meta.pkl"
 
@@ -30,9 +30,9 @@ try:
     with DATA_JSON_PATH.open("r", encoding="utf-8") as f:
         _pages_list = json.load(f)
         PAGES_DICT = {p["id"]: p for p in _pages_list if "id" in p}
-    print(f"RAG: Loaded {len(PAGES_DICT)} pages into dictionary.")
+    print(f"RAG (ask.py): Loaded {len(PAGES_DICT)} pages from {DATA_JSON_PATH}.")
 except Exception as e:
-    print(f"RAG ERROR: Failed to load {DATA_JSON_PATH}: {e}")
+    print(f"RAG ERROR (ask.py): Failed to load {DATA_JSON_PATH}: {e}")
 
 try:
     print(f"RAG: Loading FAISS index from {INDEX_PATH}...")
