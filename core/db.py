@@ -32,10 +32,20 @@ def initialize_db():
             ts INTEGER NOT NULL
         );
         """)
+        local_cur.execute(""" 
+        CREATE TABLE IF NOT EXISTS vault (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            page_id INTEGER NOT NULL,
+            note TEXT,
+            ts INTEGER NOT NULL,
+            UNIQUE(user_id, page_id) -- Prevent user from saving same page multiple times
+        );
+        """)
         # Future: Add an index on ledger (user_id, ts) for faster balance lookups
         # cur.execute("CREATE INDEX IF NOT EXISTS idx_ledger_user_ts ON ledger (user_id, ts DESC);")
         con.commit()
-        print(f"Database {DB_FILE} checked, tables ensured (users, ledger).")
+        print(f"Database {DB_FILE} checked, tables ensured (users, ledger, vault).")
     finally:
         local_cur.close() # Ensure local cursor is closed
 
