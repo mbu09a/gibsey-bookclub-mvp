@@ -2,7 +2,7 @@ from fastapi import Cookie, HTTPException, status, Depends
 from typing import Annotated, Dict, Any, Optional # For type hinting
 
 from core.session import verify_cookie
-from core.db import con, cur # Import shared connection and cursor
+from core.db import con # Only import the connection
 
 def get_current_user(gibsey_sid: Annotated[Optional[str], Cookie()] = None) -> Dict[str, Any]:
     """
@@ -24,8 +24,14 @@ def get_current_user(gibsey_sid: Annotated[Optional[str], Cookie()] = None) -> D
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    cur.execute("SELECT id, email, name FROM users WHERE id=?", (user_id,))
-    user_row = cur.fetchone()
+    db_cur = None # Initialize to None
+    try:
+        db_cur = con.cursor() # Obtain a new cursor
+        db_cur.execute("SELECT id, email, name FROM users WHERE id=?", (user_id,))
+        user_row = db_cur.fetchone()
+    finally:
+        if db_cur: # Ensure cursor exists before trying to close
+            db_cur.close() # Close the cursor in a finally block
 
     if not user_row:
         # This case should ideally not happen if a valid user_id was in the cookie
