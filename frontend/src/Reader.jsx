@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Page from './Page'; // Assuming Page.jsx is in the same directory
-// We will add AskBox and AnswerPane here later (Day 3)
+import AskBox from './AskBox'; // <--- Added import
+import AnswerPane from './AnswerPane'; // <--- Added import
 // We will add CreditsBadge here later (Day 4)
 
 export default function Reader() {
@@ -9,11 +10,16 @@ export default function Reader() {
   const [maxPageId, setMaxPageId] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [askError, setAskError] = useState(null); // Specific error for AskBox
+
+  const [answerData, setAnswerData] = useState(null); // <--- Added state for answer
 
   // Fetch page data function
   const fetchPage = useCallback(async (currentPageId) => {
     setIsLoading(true);
     setError(null);
+    setAskError(null); // Clear ask error when navigating
+    setAnswerData(null); // Clear previous answer when navigating
     try {
       const response = await fetch(`/api/v1/page/${currentPageId}`);
       if (!response.ok) {
@@ -60,6 +66,28 @@ export default function Reader() {
     setPid((currentPid) => Math.max(1, currentPid - 1)); // Ensure pid doesn't go below 1
   };
 
+  // Callback for AskBox
+  const handleNewAnswer = (newAnswer, errMessage) => {
+    if (errMessage) {
+        setAskError(errMessage);
+        setAnswerData(null); // Clear old answer on new error
+    } else {
+        setAnswerData(newAnswer);
+        setAskError(null); // Clear previous ask error
+        // Scroll to the top of the page to see the answer
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    // Credits will be handled by CreditsBadge component and /me endpoint later
+    // If newAnswer contains credit info, App.jsx might need to be involved for a global credit state.
+  };
+
+  // Callback for AnswerPane to jump to a page
+  const jumpToPageId = useCallback((newPageId) => {
+    if (newPageId >= 1 && (maxPageId === null || newPageId <= maxPageId)) {
+      setPid(newPageId);
+    }
+  }, [maxPageId]);
+
   return (
     <div className="reader-container mx-auto max-w-4xl p-4 font-sans">
       <nav className="flex justify-between items-center p-4 bg-gray-100 dark:bg-gray-800 rounded-md shadow-md mb-6">
@@ -89,9 +117,16 @@ export default function Reader() {
       {error && <p style={{ textAlign: 'center', padding: '20px', color: 'red' }}>Error: {error}</p>}
       
       {!isLoading && !error && pageData && <Page pageData={pageData} />}
-      {!isLoading && !error && !pageData && <p style={{ textAlign: 'center', padding: '20px' }}>Page content will appear here.</p>} 
+      {!isLoading && !error && !pageData && <p style={{ textAlign: 'center', padding: '20px' }}>Page content will appear here.</p>}
       
-      {/* AskBox and AnswerPane will be added below the Page component later */}
+      {/* Ask UI components added here */}
+      {!isLoading && pageData && (
+        <>
+          <AskBox onAnswer={handleNewAnswer} />
+          {askError && <p className="mt-2 text-sm text-center text-red-600 dark:text-red-400">Error from AskBox: {askError}</p>}
+          <AnswerPane answerData={answerData} setPageId={jumpToPageId} />
+        </>
+      )}
     </div>
   );
 } 
