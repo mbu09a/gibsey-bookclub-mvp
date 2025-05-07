@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from api.routes import auth as auth_router
 from api.routes import pages as pages_router
 from api.routes import ask as ask_router
+from api.routes import me as me_router
 from core.auth import get_current_user
 from typing import Dict, Any
 # We will add other routers here as we build them (pages, me, vault, etc.)
@@ -32,11 +33,7 @@ app.add_middleware(
 app.include_router(auth_router.router, prefix="/api/v1", tags=["Authentication"])
 app.include_router(pages_router.router, prefix="/api/v1", tags=["Pages"])
 app.include_router(ask_router.router, prefix="/api/v1", tags=["Ask the Guide"])
-
-@app.get("/api/v1/users/me", tags=["Users"], response_model=Dict[str, Any])
-async def read_users_me(current_user: Dict[str, Any] = Depends(get_current_user)):
-    """Fetch the currently authenticated user's details."""
-    return current_user
+app.include_router(me_router.router, prefix="/api/v1/users", tags=["Users"])
 
 @app.get("/health", tags=["Server Health"])
 async def health_check():
