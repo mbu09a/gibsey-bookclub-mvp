@@ -1,5 +1,7 @@
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+import pathlib
 from api.routes import auth as auth_router
 from api.routes import pages as pages_router
 from api.routes import ask as ask_router
@@ -10,6 +12,9 @@ from api.routes import onboard as onboard_router
 from core.auth import get_current_user
 from typing import Dict, Any
 # We will add other routers here as we build them (pages, me, vault, etc.)
+
+PROJECT_ROOT = pathlib.Path(__file__).resolve().parent
+STATIC_FILES_DIR = PROJECT_ROOT / "frontend" / "dist"
 
 app = FastAPI(
     title="Gibsey Bookclub MVP API",
@@ -45,12 +50,13 @@ app.include_router(onboard_router.router, prefix="/api/v1/onboard", tags=["Onboa
 async def health_check():
     return {"status": "healthy"}
 
-# In a real app, you might have a function to close DB connection on shutdown:
-# @app.on_event("shutdown")
-# def shutdown_event():
-#     from core.db import con
-#     con.close()
-#     print("Database connection closed.")
+# Serve Static Files (React frontend) - Mount this last
+if STATIC_FILES_DIR.exists() and (STATIC_FILES_DIR / "index.html").exists():
+    app.mount("/", StaticFiles(directory=STATIC_FILES_DIR, html=True), name="static-frontend")
+    print(f"Serving static files from: {STATIC_FILES_DIR}")
+else:
+    print(f"WARNING: Static files directory not found or index.html missing: {STATIC_FILES_DIR}")
+    print("Frontend will not be served by FastAPI. Run `cd frontend && npm run build`")
 
-# To run this app (from project root):
-# uvicorn main:app --reload --host 0.0.0.0 --port 8000 
+# To run this app (from project root for production-like serving):
+# .venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8000 
