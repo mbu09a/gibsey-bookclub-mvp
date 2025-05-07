@@ -1,8 +1,10 @@
+import sqlite3 # For type hinting Connection
 from fastapi import APIRouter, Depends, Body
 from typing import Dict, Any
 
 from core.auth import get_current_user
-from core.ledger import credit, get_balance # <--- Added get_balance
+from core.ledger import credit, get_balance
+from core.db import get_db # Import get_db for direct use
 
 router = APIRouter()
 
@@ -14,7 +16,8 @@ router = APIRouter()
 @router.post("/ask")
 async def ask_question(
     payload: Dict[str, Any] = Body(...), # Expects {"query": "user question"}
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db: sqlite3.Connection = Depends(get_db) # Inject DB connection
 ):
     """
     Handles a user's question. 
@@ -32,9 +35,10 @@ async def ask_question(
 
     new_balance = current_user.get('credits', 0) # Fallback, though /me should be source of truth
     if user_id:
-        credit_success = credit(user_id, +1, "ask_question")
+        # Pass the db connection to credit and get_balance
+        credit_success = credit(db, user_id, +1, "ask_question")
         if credit_success:
-            new_balance = get_balance(user_id)
+            new_balance = get_balance(db, user_id)
     else:
         print("Warning: User ID not found in current_user, cannot record credit for /ask")
 

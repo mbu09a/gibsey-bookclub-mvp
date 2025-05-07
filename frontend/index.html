@@ -4,7 +4,21 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Vite + React</title>
+    <title>Gibsey Bookclub MVP</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
+    <script>
+      // Enable class-based dark mode (for Day 8)
+      // And configure Tailwind for JIT mode benefits if possible via CDN (often default)
+      tailwind.config = {
+        darkMode: 'class', // or 'media' based on Day 8 plan
+        theme: {
+          extend: {
+            // You can add custom theme extensions here if needed later
+          }
+        }
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

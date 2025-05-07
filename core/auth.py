@@ -1,19 +1,23 @@
+import sqlite3 # For type hinting Connection
 from fastapi import Cookie, HTTPException, status, Depends
-from typing import Annotated, Dict, Any, Optional # For type hinting
+from typing import Annotated, Dict, Any, Optional
 
 from core.session import verify_cookie
-from core.db import con # Only import the connection
+from core.db import get_db # Import the get_db dependency
 
-def get_current_user(gibsey_sid: Annotated[Optional[str], Cookie()] = None) -> Dict[str, Any]:
+def get_current_user(
+    gibsey_sid: Annotated[Optional[str], Cookie()] = None, 
+    db: sqlite3.Connection = Depends(get_db) # Inject DB connection
+) -> Dict[str, Any]:
     """
     FastAPI dependency to get the current authenticated user based on the session cookie.
-    Raises HTTPException with 401 status if authentication fails.
+    Uses a request-scoped database connection.
     """
     if gibsey_sid is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated: No session cookie provided",
-            headers={"WWW-Authenticate": "Bearer"}, # Though we use cookies, good practice
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
     user_id = verify_cookie(gibsey_sid)
@@ -24,18 +28,16 @@ def get_current_user(gibsey_sid: Annotated[Optional[str], Cookie()] = None) -> D
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    db_cur = None # Initialize to None
+    db_cur = None
     try:
-        db_cur = con.cursor() # Obtain a new cursor
+        db_cur = db.cursor() # Use the injected db connection
         db_cur.execute("SELECT id, email, name FROM users WHERE id=?", (user_id,))
         user_row = db_cur.fetchone()
     finally:
-        if db_cur: # Ensure cursor exists before trying to close
-            db_cur.close() # Close the cursor in a finally block
+        if db_cur:
+            db_cur.close()
 
     if not user_row:
-        # This case should ideally not happen if a valid user_id was in the cookie
-        # and the user exists in the database. Could indicate DB inconsistency or stale cookie.
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found for valid session. Please login again.",

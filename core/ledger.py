@@ -1,39 +1,46 @@
+import sqlite3 # For type hinting Connection
 import time
 from typing import Tuple, Optional, List, Dict, Any
+from fastapi import Depends # For Depends(get_db)
 
-from core.db import con # Only import the connection
+from core.db import get_db # Import the get_db dependency
 
-def credit(user_id: int, delta: int, reason: str) -> bool:
+# The functions credit, get_balance, etc. are not FastAPI path operations themselves,
+# so they don't directly use Depends(). They will be called by path operations
+# which will pass the db connection to them.
+
+def credit(db: sqlite3.Connection, user_id: int, delta: int, reason: str) -> bool:
     """
     Records a credit transaction in the ledger for a given user.
-    Returns True on success, False on failure.
+    Uses the provided db connection.
     """
     current_timestamp = int(time.time())
     db_cur = None
     try:
-        db_cur = con.cursor()
+        db_cur = db.cursor()
         db_cur.execute(
             "INSERT INTO ledger (user_id, delta, reason, ts) VALUES (?, ?, ?, ?)",
             (user_id, delta, reason, current_timestamp)
         )
-        con.commit() # Commit on the connection
+        db.commit() # Commit on the connection
         print(f"Ledger entry: User {user_id}, Delta {delta}, Reason '{reason}', TS {current_timestamp}")
         return True
     except Exception as e:
         print(f"Error adding credit to ledger for user {user_id}: {e}")
-        # con.rollback() # Consider if an explicit rollback is needed on error
+        # db.rollback() # Consider rollback if part of a larger transaction in the caller
         return False
     finally:
         if db_cur:
             db_cur.close()
 
-def get_balance(user_id: int) -> int:
+def get_balance(db: sqlite3.Connection, user_id: int) -> int:
     """
     Calculates the current credit balance for a given user.
+    Uses the provided db connection.
     """
     db_cur = None
     try:
-        db_cur = con.cursor()
+        db_cur = db.cursor()
         db_cur.execute("SELECT COALESCE(SUM(delta), 0) FROM ledger WHERE user_id = ?", (user_id,))
         result = db_cur.fetchone()
         return result[0] if result else 0
@@ -45,11 +52,11 @@ def get_balance(user_id: int) -> int:
             db_cur.close()
 
 # Example of fetching full ledger history for a user (not directly used by /me, but useful for /ledger.csv later)
-def get_ledger_entries_for_user(user_id: int) -> List[Dict[str, Any]]:
+def get_ledger_entries_for_user(db: sqlite3.Connection, user_id: int) -> List[Dict[str, Any]]:
     """Fetches all ledger entries for a specific user, ordered by time."""
     db_cur = None
     try:
-        db_cur = con.cursor()
+        db_cur = db.cursor()
         db_cur.execute(
             "SELECT id, delta, reason, ts FROM ledger WHERE user_id = ? ORDER BY ts DESC", 
             (user_id,)
