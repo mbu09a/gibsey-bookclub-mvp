@@ -3,6 +3,7 @@ import Login from './Login';
 import Reader from './Reader';
 import Vault from './Vault';
 // import Welcome from './Welcome'; // We'll add this for Day 7 onboarding
+import Footer from './Footer';
 import './App.css'; // Standard Vite App CSS, can be modified/removed
 
 function App() {
@@ -96,10 +97,12 @@ function App() {
 
   return (
     <div className="App min-h-screen flex flex-col">
-      {navControls}
-      <main className="flex-grow">
+      {/* Render navControls only if not on login view */}
+      {currentView !== 'login' && navControls}
+      <main className="flex-grow container mx-auto px-4 py-2">
         {viewToRender}
       </main>
+      <Footer />
     </div>
   );
 }
