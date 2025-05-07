@@ -26,6 +26,7 @@ app = FastAPI(
 origins = [
     "http://localhost:5173", # Vite dev server
     "http://localhost:3000", # Common alternative for React dev servers
+    "https://b376-2600-100d-a0ed-1bea-a059-db35-c971-3724.ngrok-free.app" # <--- Added your Ngrok URL
     # Add any other origins if needed, e.g., your production frontend URL
 ]
 
