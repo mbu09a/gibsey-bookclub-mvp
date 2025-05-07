@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import Page from './Page'; // Assuming Page.jsx is in the same directory
 import AskBox from './AskBox'; // <--- Added import
 import AnswerPane from './AnswerPane'; // <--- Added import
-import CreditsBadge, { useCredits } from './CreditsBadge'; // <--- Added CreditsBadge and useCredits
+import CreditsBadge from './CreditsBadge'; // Import only the component
+import { useCredits } from './hooks/useCredits'; // <--- Import hook from new location
 // We will add CreditsBadge here later (Day 4)
 
 export default function Reader({ initialPid = 1 }) {
@@ -34,10 +35,16 @@ export default function Reader({ initialPid = 1 }) {
     setError(null);
     setAskError(null);
     setAnswerData(null);
-    setIsPageSaved(false); // Reset save status for new page
-    setPageSaveError(null);
+    // Not resetting setIsPageSaved here, as it should persist for the current page view
     try {
       const response = await fetch(`/api/v1/page/${currentPageId}`);
+
+      // Check if the response is actually our HTML welcome page due to a redirect
+      if (response.redirected && response.url.includes('/api/v1/onboard/welcome')) {
+        window.location.href = response.url; // Navigate browser to the HTML page
+        return; // Stop further processing
+      }
+
       if (!response.ok) {
         if (response.status === 401) {
             setError('Authentication failed. Please login again.');
@@ -46,18 +53,22 @@ export default function Reader({ initialPid = 1 }) {
             const errData = await response.json();
             setError(errData.detail || `Page ${currentPageId} not found.`);
         } else {
-            throw new Error(`Failed to fetch page data. Status: ${response.status}`);
+            // Attempt to parse error as JSON, but fallback
+            try {
+                const errData = await response.json();
+                throw new Error(errData.detail || `Failed to fetch page data. Status: ${response.status}`);
+            } catch (jsonError) {
+                throw new Error(`Failed to fetch page data. Status: ${response.status}. Response not JSON.`);
+            }
         }
         setPageData(null);
         return;
       }
-      const data = await response.json();
+      const data = await response.json(); // Should be safe now
       setPageData(data);
       if (data.max_page_id) {
         setMaxPageId(data.max_page_id);
       }
-      // After fetching a page, one might check if it's already in the vault here
-      // and set setIsPageSaved(true) if it is. For MVP, backend handles duplicates.
     } catch (err) {
       console.error("Error fetching page:", err);
       setError(err.message || 'An unexpected error occurred.');
