@@ -6,48 +6,76 @@ import Vault from './Vault';
 import Footer from './Footer';
 import './App.css'; // Standard Vite App CSS, can be modified/removed
 
-function App() {
-  // Simple view management: 'login', 'welcome', 'reader'
-  // We will check for an existing valid session to bypass login later
-  const [currentView, setCurrentView] = useState('login'); 
-  const [readerPageId, setReaderPageId] = useState(1); // To control reader's page from Vault
+// Helper to check for a cookie
+function getCookie(name) {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(';').shift();
+    return null;
+}
 
-  // This effect could be used to check for an existing valid session on component mount
-  // For now, we always start at login for simplicity in Day 2.
-  // useEffect(() => {
-  //   async function checkSession() {
-  //     try {
-  //       const response = await fetch('/api/v1/users/me'); // Test if already logged in
-  //       if (response.ok) {
-  //         setCurrentView('reader'); // Or 'welcome' if not seen before
-  //       } else {
-  //         setCurrentView('login');
-  //       }
-  //     } catch (error) {
-  //       setCurrentView('login'); // Default to login on error
-  //     }
-  //   }
-  //   checkSession();
-  // }, []);
+function App() {
+  // Views: 'login', 'reader', 'vault'
+  // Welcome screen is handled by API redirect now.
+  const [currentView, setCurrentView] = useState('login'); 
+  const [readerPageId, setReaderPageId] = useState(1);
+  const [isLoggedIn, setIsLoggedIn] = useState(false); // Manage login state
+
+  // Check session and welcome status on initial load or when view might change
+  useEffect(() => {
+    async function checkUserStatus() {
+      try {
+        const response = await fetch('/api/v1/users/me');
+        if (response.ok) {
+          setIsLoggedIn(true);
+          // If logged in, and seen_welcome cookie is set by server after /onboard/enter,
+          // we can default to reader. If API redirects to /api/v1/onboard/welcome,
+          // browser will follow that. If it doesn't (e.g. already seen_welcome), /me succeeds.
+          if (getCookie('seen_welcome')) {
+            setCurrentView('reader'); 
+          } else {
+            // This case implies /me succeeded (so logged in) but no seen_welcome cookie.
+            // The API should have redirected. If we land here, it means API didn't redirect
+            // (e.g. if seen_welcome was checked *after* successful user fetch in get_current_user).
+            // For now, if /me is ok, assume welcome was handled or seen.
+            // The critical redirect to HTML welcome page is done by API if needed.
+            setCurrentView('reader'); 
+          }
+        } else {
+          setIsLoggedIn(false);
+          setCurrentView('login');
+        }
+      } catch (error) {
+        setIsLoggedIn(false);
+        setCurrentView('login');
+      }
+    }
+    checkUserStatus();
+  }, []); // Runs once on mount
 
   const handleLoginSuccess = () => {
-    // As per Day 7, new users go to /welcome first.
-    // We'll need a way to know if welcome has been seen.
-    // For Day 2, let's simplify and go directly to reader after login.
-    // We will refine this with the /welcome flow from Day 7.
-    // setCurrentView('welcome'); 
+    setIsLoggedIn(true);
+    // After login, the API redirect in get_current_user for the first protected call
+    // (e.g., from Reader's /me or /page/1 call) will handle showing the HTML welcome page
+    // if the 'seen_welcome' cookie is not set. Once 'seen_welcome' is set by /onboard/enter,
+    // user will be redirected to '/' by the backend, and this App component will re-evaluate.
+    // So, we can optimistically try to go to reader here.
     setCurrentView('reader'); 
-    setReaderPageId(1); // Reset to page 1 on new login
+    setReaderPageId(1);
   };
 
-  // const handleWelcomeComplete = () => {
-  //   setCurrentView('reader');
-  // };
-
-  const navigateToVault = () => {
-    setCurrentView('vault');
+  const handleLogout = async () => {
+    // We don't have a /logout API endpoint yet that clears the HTTPOnly cookie.
+    // For now, simulate logout by clearing React state and any client-side session info.
+    // To truly logout, the gibsey_sid cookie needs to be cleared (usually by backend setting max-age=0)
+    setIsLoggedIn(false);
+    setCurrentView('login');
+    // document.cookie = "gibsey_sid=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;"; // JS can't clear HttpOnly
+    // document.cookie = "seen_welcome=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;"; // Can clear this one
+    console.log("Simulated logout. True logout requires backend to clear HttpOnly session cookie.");
   };
 
+  const navigateToVault = () => { setCurrentView('vault'); };
   const navigateToReader = useCallback((pageId = 1) => {
     setReaderPageId(pageId);
     setCurrentView('reader');
@@ -56,49 +84,31 @@ function App() {
   let viewToRender;
   let navControls = null;
 
-  if (currentView === 'login') {
+  if (!isLoggedIn || currentView === 'login') {
     viewToRender = <Login onLoginSuccess={handleLoginSuccess} />;
   } else {
-    // Common navigation for authenticated views (Reader, Vault)
     navControls = (
       <div className="p-4 bg-gray-200 dark:bg-gray-700 text-center space-x-4 mb-4 rounded-md shadow">
-        <button 
-            onClick={() => navigateToReader()} 
-            disabled={currentView === 'reader'}
-            className="px-4 py-2 border rounded-md bg-indigo-500 text-white hover:bg-indigo-600 disabled:bg-gray-400 transition-colors"
-        >
-            Reader
-        </button>
-        <button 
-            onClick={navigateToVault} 
-            disabled={currentView === 'vault'}
-            className="px-4 py-2 border rounded-md bg-indigo-500 text-white hover:bg-indigo-600 disabled:bg-gray-400 transition-colors"
-        >
-            My Vault
-        </button>
-        {/* Logout button could go here */}
+        <button onClick={() => navigateToReader()} disabled={currentView === 'reader'} className="px-4 py-2 border rounded-md bg-indigo-500 text-white hover:bg-indigo-600 disabled:bg-gray-400 transition-colors">Reader</button>
+        <button onClick={navigateToVault} disabled={currentView === 'vault'} className="px-4 py-2 border rounded-md bg-indigo-500 text-white hover:bg-indigo-600 disabled:bg-gray-400 transition-colors">My Vault</button>
+        <button onClick={handleLogout} className="px-4 py-2 border rounded-md bg-red-500 text-white hover:bg-red-600 transition-colors">Logout (Simulated)</button>
       </div>
     );
-
     switch (currentView) {
       case 'reader':
-        // Pass readerPageId to Reader if we want to control its initial pid from here
-        // For now, Reader manages its own pid internally after initial mount
-        // We could enhance Reader to take an initialPid prop if needed for deep linking from Vault
         viewToRender = <Reader key={readerPageId} initialPid={readerPageId} />;
         break;
       case 'vault':
         viewToRender = <Vault onSelectPage={navigateToReader} />;
         break;
-      default: // Should not happen if logged in
-        viewToRender = <Login onLoginSuccess={handleLoginSuccess} />;
+      default: // Default to reader if logged in but view is unexpected
+        viewToRender = <Reader key={readerPageId} initialPid={readerPageId} />;
     }
   }
 
   return (
     <div className="App min-h-screen flex flex-col">
-      {/* Render navControls only if not on login view */}
-      {currentView !== 'login' && navControls}
+      {navControls} 
       <main className="flex-grow container mx-auto px-4 py-2">
         {viewToRender}
       </main>
