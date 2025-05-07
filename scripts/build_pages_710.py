@@ -26,37 +26,68 @@ if chunks and chunks[0].strip() == "":
     chunks_to_process = chunks[1:]
     print(f"Split into {len(chunks_to_process)} chunks (first was empty, skipped).")
 elif chunks:
-    # This case implies there was text before the first "###Page <d>###" marker, 
-    # and re.split would put that text in chunks[0].
-    # If your file format guarantees it starts with ###Page 1###, chunks[0] should be empty.
-    # For safety, we assume if chunks[0] is not empty, it might be content before page 1 or a malformed start.
-    # The original plan's [1:] assumes the first split part is to be ignored.
-    chunks_to_process = chunks[1:] 
+    # This case implies the first chunk might be content before any page marker,
+    # or the file doesn't start with a page marker. Assuming we want to ignore it.
+    chunks_to_process = chunks[1:] if len(chunks) > 1 else [] 
     print(f"Split into {len(chunks_to_process)} chunks. First chunk (before first page marker or if no marker at start) was ignored or not page content.")
 else:
     print("ERROR: Could not split the source file into page chunks.")
     sys.exit(1)
 
+if not chunks_to_process:
+    print("ERROR: No page content found after splitting by page markers.")
+    sys.exit(1)
+
+print(f"Processing {len(chunks_to_process)} text chunks for pages.")
+
 pages = []
+CHAPTER_TITLE_PATTERN = re.compile(r"^\*\*(.+?)\*\*$") # Matches lines like **Title Here**
+
 for idx, chunk_text in enumerate(chunks_to_process, 1):
-    # Process each chunk
-    # Remove leading/trailing whitespace from the chunk itself
     processed_chunk_text = chunk_text.strip()
-    
-    # Split into lines, strip each line, and keep only non-empty lines
     lines = [l.strip() for l in processed_chunk_text.splitlines() if l.strip()]
     
     if not lines:
-        print(f"Warning: Page {idx} (original chunk index {idx-1}) resulted in no content lines after stripping. Skipping.")
+        print(f"Warning: Page {idx} (original chunk index {idx-1}) is empty after stripping. Skipping.")
         continue
         
-    title = textwrap.shorten(lines[0], width=50, placeholder="…")
-    # Join lines with a single space, effectively re-flowing paragraphs that might have been split by newlines
-    full_text = " ".join(lines) 
+    page_title = f"Page {idx}" # Default title
+    page_text_lines = lines
     
+    # Check if the first line is a chapter/section title
+    title_match = CHAPTER_TITLE_PATTERN.match(lines[0])
+    if title_match:
+        extracted_title = title_match.group(1).strip()
+        if len(extracted_title) > 3: # Arbitrary length to avoid using just "**" or very short things as titles
+            page_title = extracted_title
+            page_text_lines = lines[1:] # Use subsequent lines for text body
+            if not page_text_lines: # If only title line existed
+                # page_text_lines = [extracted_title] # Or some placeholder like "[Content under this title]"
+                print(f"Warning: Page {idx} titled '{page_title}' has no further content lines. Using title as text or consider placeholder.")
+                # For now, if no further lines, the text will be empty. This can be adjusted.
+                pass 
+    else:
+        # Fallback if no **Title** found, use textwrap on the first line if it's substantial
+        if lines[0] and len(lines[0]) > 10: # Avoid using very short first lines as titles
+            page_title = textwrap.shorten(lines[0], width=60, placeholder="…") # Increased width slightly
+        # else page_title remains "Page {idx}"
+
+    full_text = " ".join(page_text_lines).strip()
+    
+    # If after processing, full_text is empty but we had a chapter title, maybe use title as text.
+    if not full_text and title_match and page_title != f"Page {idx}":
+        # This handles case where a page is ONLY a title like **Chapter End**
+        # We can decide if this page should still be created or skipped.
+        # For now, let's use the title as text if text would otherwise be empty.
+        full_text = page_title 
+
+    if not full_text: # Final check if text is still empty
+        print(f"Warning: Page {idx} ultimately has no text content. Skipping.")
+        continue
+
     pages.append({
         "id": idx,
-        "title": title,
+        "title": page_title,
         "text": full_text
     })
 
