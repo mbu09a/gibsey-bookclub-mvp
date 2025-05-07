@@ -4,6 +4,7 @@ import Reader from './Reader';
 import Vault from './Vault';
 // import Welcome from './Welcome'; // We'll add this for Day 7 onboarding
 import Footer from './Footer';
+import DarkToggle from './DarkToggle';
 import './App.css'; // Standard Vite App CSS, can be modified/removed
 
 // Helper to check for a cookie
@@ -88,9 +89,10 @@ function App() {
     viewToRender = <Login onLoginSuccess={handleLoginSuccess} />;
   } else {
     navControls = (
-      <div className="p-4 bg-gray-200 dark:bg-gray-700 text-center space-x-4 mb-4 rounded-md shadow">
+      <div className="p-4 bg-gray-200 dark:bg-gray-700 flex flex-wrap justify-center items-center gap-y-2 sm:gap-y-0 space-x-4 mb-4 rounded-md shadow">
         <button onClick={() => navigateToReader()} disabled={currentView === 'reader'} className="px-4 py-2 border rounded-md bg-indigo-500 text-white hover:bg-indigo-600 disabled:bg-gray-400 transition-colors">Reader</button>
         <button onClick={navigateToVault} disabled={currentView === 'vault'} className="px-4 py-2 border rounded-md bg-indigo-500 text-white hover:bg-indigo-600 disabled:bg-gray-400 transition-colors">My Vault</button>
+        <DarkToggle />
         <button onClick={handleLogout} className="px-4 py-2 border rounded-md bg-red-500 text-white hover:bg-red-600 transition-colors">Logout (Simulated)</button>
       </div>
     );

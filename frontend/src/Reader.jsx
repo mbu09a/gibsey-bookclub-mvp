@@ -156,7 +156,7 @@ export default function Reader({ initialPid = 1 }) {
 
   return (
     <div className="reader-container mx-auto max-w-4xl p-4 font-sans">
-      <nav className="flex justify-between items-center p-4 bg-gray-100 dark:bg-gray-800 rounded-md shadow-md mb-6">
+      <nav className="flex flex-wrap items-center justify-between gap-y-3 p-4 bg-gray-100 dark:bg-gray-800 rounded-md shadow-md mb-6">
         <button 
           onClick={goToPrevPage} 
           disabled={pid === 1 || isLoading}
@@ -165,7 +165,7 @@ export default function Reader({ initialPid = 1 }) {
         >
           ◀ Prev
         </button>
-        <span className="text-lg font-semibold text-gray-700 dark:text-gray-200">
+        <span className="text-lg font-semibold text-gray-700 dark:text-gray-200 order-first w-full text-center sm:order-none sm:w-auto">
           Page {pid}{maxPageId ? ` of ${maxPageId}` : ''}
         </span>
         <div className="flex items-center gap-4">
