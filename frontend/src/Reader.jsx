@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import Page from './Page'; // Assuming Page.jsx is in the same directory
 import AskBox from './AskBox'; // <--- Added import
 import AnswerPane from './AnswerPane'; // <--- Added import
+import CreditsBadge, { useCredits } from './CreditsBadge'; // <--- Added CreditsBadge and useCredits
 // We will add CreditsBadge here later (Day 4)
 
 export default function Reader() {
@@ -14,6 +15,8 @@ export default function Reader() {
 
   const [answerData, setAnswerData] = useState(null); // <--- Added state for answer
 
+  const { credits, setCredits, fetchCredits } = useCredits(); // <--- Use the hook
+
   // Fetch page data function
   const fetchPage = useCallback(async (currentPageId) => {
     setIsLoading(true);
@@ -25,7 +28,8 @@ export default function Reader() {
       if (!response.ok) {
         if (response.status === 401) {
             setError('Authentication failed. Please login again.');
-            // Consider redirecting to login: window.location.href = '/login';
+            // Potentially clear credits if auth fails for page load
+            setCredits(null); 
         } else if (response.status === 404) {
             const errData = await response.json();
             setError(errData.detail || `Page ${currentPageId} not found.`);
@@ -48,7 +52,7 @@ export default function Reader() {
       setPageData(null);
     }
     setIsLoading(false);
-  }, []);
+  }, [setCredits]);
 
   // Effect to fetch page when pid changes
   useEffect(() => {
@@ -74,6 +78,9 @@ export default function Reader() {
     } else {
         setAnswerData(newAnswer);
         setAskError(null); // Clear previous ask error
+        if (newAnswer && typeof newAnswer.credits !== 'undefined') {
+            setCredits(newAnswer.credits); // <--- Update credits from /ask response
+        }
         // Scroll to the top of the page to see the answer
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
@@ -102,14 +109,17 @@ export default function Reader() {
         <span className="text-lg font-semibold text-gray-700 dark:text-gray-200">
           Page {pid}{maxPageId ? ` of ${maxPageId}` : ''}
         </span>
-        <button 
-          onClick={goToNextPage} 
-          disabled={(maxPageId !== null && pid >= maxPageId) || isLoading}
-          className="px-4 py-2 border rounded-md bg-blue-500 text-white hover:bg-blue-600 disabled:bg-gray-300 dark:disabled:bg-gray-600 transition-colors"
-          aria-label="Next page"
-        >
-          Next ▶
-        </button>
+        <div className="flex items-center gap-4">
+            <CreditsBadge credits={credits} />
+            <button 
+              onClick={goToNextPage} 
+              disabled={(maxPageId !== null && pid >= maxPageId) || isLoading}
+              className="px-4 py-2 border rounded-md bg-blue-500 text-white hover:bg-blue-600 disabled:bg-gray-300 dark:disabled:bg-gray-600 transition-colors"
+              aria-label="Next page"
+            >
+              Next ▶
+            </button>
+        </div>
         {/* DarkToggle and CreditsBadge will go here or in a main nav bar */}
       </nav>
 

@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, Body
-from typing import Dict, Any, List # For type hinting
+from typing import Dict, Any
 
 from core.auth import get_current_user
-# from core.ledger import credit # We will use this later when credits are earned
+from core.ledger import credit, get_balance # <--- Added get_balance
 
 router = APIRouter()
 
@@ -30,17 +30,16 @@ async def ask_question(
     simulated_answer += '{"page_id":1, "loc":"p1-1", "quote":"Natalie stood before the doorway..."}.\n'
     simulated_answer += 'And another: {"page_id":2, "loc":"p2-1", "quote":"The brass knob was cold..."}.'
 
-    # Simulate earning a credit (we'll call the actual credit function later)
-    # credit(user_id, +1, "ask_question") 
-    
-    # Fetch current credits (stubbed - actual credits will come from ledger/me endpoint)
-    # For now, let's assume credits badge will be updated by a separate /me call from frontend if needed
-    # or we can return a dummy credit count.
-    # For Day 4, the /me endpoint returns credits. This /ask response can also return new total if easy.
-    current_credits_stub = 1 # Placeholder
+    new_balance = current_user.get('credits', 0) # Fallback, though /me should be source of truth
+    if user_id:
+        credit_success = credit(user_id, +1, "ask_question")
+        if credit_success:
+            new_balance = get_balance(user_id)
+    else:
+        print("Warning: User ID not found in current_user, cannot record credit for /ask")
 
     return {
         "answer": simulated_answer,
         "citations": [1, 2], # Placeholder page IDs for citations
-        "credits": current_credits_stub # Placeholder for user's new credit total
+        "credits": new_balance # Return the new balance
     } 
