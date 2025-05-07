@@ -1,0 +1,132 @@
+version: '3'
+
+services:
+  # Cassandra database
+  cassandra:
+    image: cassandra:4.1
+    container_name: gibsey-cassandra
+    ports:
+      - "9042:9042"
+    environment:
+      - CASSANDRA_CLUSTER_NAME=GibseyCluster
+      - MAX_HEAP_SIZE=512M
+      - HEAP_NEWSIZE=100M
+    volumes:
+      - cassandra_data:/var/lib/cassandra
+    healthcheck:
+      test: ["CMD", "cqlsh", "-u", "cassandra", "-p", "cassandra", "-e", "describe keyspaces"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+
+  # Stargate API for Cassandra
+  stargate:
+    image: stargateio/stargate-4_0:v2.0.6
+    container_name: gibsey-stargate
+    depends_on:
+      cassandra:
+        condition: service_healthy
+    ports:
+      - "8080:8080"  # REST API
+      - "8081:8081"  # GraphQL API
+      - "8082:8082"  # Document API
+      - "9043:9043"  # Auth port
+    environment:
+      - CLUSTER_NAME=GibseyCluster
+      - CLUSTER_VERSION=4.0
+      - CASSANDRA_CONTACT_POINTS=cassandra:9042
+      - CASSANDRA_USERNAME=cassandra
+      - CASSANDRA_PASSWORD=cassandra
+      - DEVELOPER_MODE=true
+      - ENABLE_AUTH=true
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8082/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+
+  # Zookeeper - needed for Kafka
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    container_name: gibsey-zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Kafka message broker
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    container_name: gibsey-kafka
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: true
+    healthcheck:
+      test: ["CMD", "kafka-topics", "--bootstrap-server", "localhost:9092", "--list"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Debezium for CDC (Change Data Capture)
+  debezium:
+    image: debezium/connect:2.4
+    container_name: gibsey-debezium
+    depends_on:
+      kafka:
+        condition: service_healthy
+      cassandra:
+        condition: service_healthy
+    ports:
+      - "8083:8083"
+    environment:
+      GROUP_ID: gibsey-debezium-group
+      CONFIG_STORAGE_TOPIC: gibsey_connect_configs
+      OFFSET_STORAGE_TOPIC: gibsey_connect_offsets
+      STATUS_STORAGE_TOPIC: gibsey_connect_statuses
+      BOOTSTRAP_SERVERS: kafka:9092
+      KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      KEY_CONVERTER_SCHEMAS_ENABLE: false
+      VALUE_CONVERTER_SCHEMAS_ENABLE: false
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8083/connectors"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Faust Worker - processes Kafka messages
+  faust-worker:
+    build:
+      context: ../faust_worker
+      dockerfile: Dockerfile
+    container_name: gibsey-faust-worker
+    volumes:
+      - ../faust_worker:/app
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER: kafka:9092
+      STARGATE_URL: http://stargate:8082
+      STARGATE_AUTH_TOKEN: ${STARGATE_AUTH_TOKEN}
+    command: python app.py worker -l info
+
+volumes:
+  cassandra_data:
