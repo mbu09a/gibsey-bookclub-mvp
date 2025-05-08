@@ -106,3 +106,76 @@ MIT — see `LICENSE` file. Feel free to fork, remix, and keep the gift loop ali
 
 \*\*Todd Fishbone \*\*— [bugs@gibsey.dev](mailto:bugs@gibsey.dev).
 *“Receive curiosity as a gift; offer insight in return.”*
+
+## CDC Pipeline Setup
+
+The project includes a Change Data Capture (CDC) pipeline to track changes in the Cassandra database and process them in real-time for on-the-fly vector embeddings updates.
+
+### Quick Setup
+
+1. Start infrastructure:
+   ```bash
+   docker compose -f infra/docker-compose.cdc.yml up -d
+   ```
+
+2. Fix the Debezium connector and set up the pipeline:
+   ```bash
+   ./scripts/fix-debezium-once-and-for-all.sh
+   ```
+
+3. Verify the CDC pipeline is working:
+   ```bash
+   ./verify-operation.sh
+   ```
+
+### Components
+
+- **Cassandra**: Database storing pages, vault entries, and ledger data
+- **Debezium**: Captures database changes and publishes to Kafka
+- **Kafka**: Message broker for CDC events
+- **Faust Worker**: Processes CDC events to update embeddings and indices
+
+### How It Works
+
+1. Changes to the Cassandra database (with CDC enabled tables) are captured by Debezium
+2. Debezium publishes these changes to Kafka topics (e.g., `gibsey.gibsey.pages`)
+3. The Faust worker consumes these events and:
+   - For page changes: Updates embeddings and FAISS index
+   - For vault changes: Tracks user preferences
+   - For ledger changes: Updates user credit summaries
+
+### Verification
+
+The `verify-operation.sh` script provides a comprehensive check of the CDC pipeline:
+
+- Validates that all required services are running
+- Ensures the Debezium connector is properly configured
+- Creates test data to trigger the CDC pipeline
+- Checks Kafka topics for CDC events
+- Verifies the Faust worker is processing events
+- Provides a detailed report of the pipeline status
+
+Run this script any time you need to verify the CDC pipeline is working correctly:
+
+```bash
+./verify-operation.sh
+```
+
+### Troubleshooting
+
+If the CDC pipeline isn't working, check:
+
+1. Debezium container logs:
+   ```bash
+   docker logs gibsey-debezium
+   ```
+
+2. Faust worker logs:
+   ```bash
+   docker logs gibsey-faust-worker
+   ```
+
+3. Run the fix script again:
+   ```bash
+   ./scripts/fix-debezium-once-and-for-all.sh
+   ```

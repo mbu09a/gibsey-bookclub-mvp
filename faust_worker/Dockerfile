@@ -10,10 +10,7 @@ ENV PYTHON_EXEC=/usr/local/bin/python
 # Explicitly add site-packages to PYTHONPATH
 ENV PYTHONPATH=/usr/local/lib/python3.11/site-packages
 
-# Install faust instead of faust-streaming
-RUN ${PYTHON_EXEC} -m pip install --no-cache-dir faust>=1.10.4
-
-# Copy requirements and install the rest using explicit python path
+# Copy requirements and install dependencies using explicit python path
 COPY faust_worker/requirements.txt .
 RUN ${PYTHON_EXEC} -m pip install --no-cache-dir -r requirements.txt
 

@@ -1,14 +1,14 @@
 #!/bin/bash
-# Script to create a Cassandra connector with the correct configuration
+# Script to create a CDC connector (Cassandra if available, PostgreSQL as fallback)
 
-echo "=== CREATING CASSANDRA CONNECTOR ==="
+echo "=== CREATING CDC CONNECTOR ==="
 
 # Wait for Debezium to be ready
 echo "Checking if Debezium is ready..."
 max_attempts=10
 attempt=0
 while [ $attempt -lt $max_attempts ]; do
-  if curl -s http://localhost:8083/ | grep -q "Kafka Connect"; then
+  if curl -s http://localhost:8083/ | grep -q "version"; then
     echo "✅ Debezium is ready"
     break
   fi
@@ -25,11 +25,16 @@ fi
 
 # Check if connector plugins are available
 echo "Checking available connector plugins..."
-curl -s http://localhost:8083/connector-plugins | grep "connector.class"
+PLUGINS=$(curl -s http://localhost:8083/connector-plugins)
+echo "$PLUGINS" | grep "connector.class" || echo "No connector classes found"
 
-# Create connector configuration
-echo "Creating connector configuration..."
-cat > /tmp/connector.json << 'EOF'
+# Check if Cassandra connector is available
+if echo "$PLUGINS" | grep -q "CassandraConnector"; then
+  echo "✅ Cassandra connector found! Using the proper Cassandra connector."
+  
+  # Create Cassandra connector configuration
+  echo "Creating Cassandra connector configuration..."
+  cat > /tmp/connector.json << 'EOF'
 {
   "name": "cassandra-connector",
   "config": {
@@ -47,10 +52,44 @@ cat > /tmp/connector.json << 'EOF'
 }
 EOF
 
-# Register the connector
-echo "Registering Cassandra connector..."
-curl -X POST -H "Content-Type: application/json" -d @/tmp/connector.json http://localhost:8083/connectors
-echo ""
+  # Register the connector
+  echo "Registering Cassandra connector..."
+  curl -X POST -H "Content-Type: application/json" -d @/tmp/connector.json http://localhost:8083/connectors
+  echo ""
+  CONNECTOR_NAME="cassandra-connector"
+  
+else
+  echo "⚠️ Cassandra connector not found. Using PostgreSQL connector for demonstration."
+  echo "To fix this, run: ./scripts/fix-debezium.sh"
+  
+  # Create PostgreSQL connector configuration for demo
+  echo "Creating PostgreSQL connector configuration (demo only)..."
+  cat > /tmp/connector.json << 'EOF'
+{
+  "name": "postgres-connector",
+  "config": {
+    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+    "tasks.max": "1",
+    "database.hostname": "cassandra",
+    "database.port": "5432",
+    "database.user": "postgres",
+    "database.password": "postgres",
+    "database.dbname": "postgres",
+    "database.server.name": "gibsey",
+    "topic.prefix": "gibsey",
+    "schema.include.list": "public",
+    "table.include.list": "public.test_cdc",
+    "snapshot.mode": "initial"
+  }
+}
+EOF
+
+  # Register the connector
+  echo "Registering PostgreSQL connector (demo)..."
+  curl -X POST -H "Content-Type: application/json" -d @/tmp/connector.json http://localhost:8083/connectors
+  echo ""
+  CONNECTOR_NAME="postgres-connector"
+fi
 
 # Wait for connector to start
 echo "Waiting for connector to initialize (10 seconds)..."
@@ -58,10 +97,10 @@ sleep 10
 
 # Check connector status
 echo "Checking connector status..."
-curl -s http://localhost:8083/connectors/cassandra-connector/status
+curl -s http://localhost:8083/connectors/$CONNECTOR_NAME/status || echo "Failed to get connector status, but continuing anyway."
 echo ""
 
-# Create test tables if they don't exist
+# Create test tables if they don't exist (for both connectors)
 echo "Creating test tables..."
 docker exec gibsey-cassandra cqlsh -e "CREATE KEYSPACE IF NOT EXISTS gibsey WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1};"
 docker exec gibsey-cassandra cqlsh -e "CREATE TABLE IF NOT EXISTS gibsey.test_cdc (id text PRIMARY KEY, data text) WITH cdc = true;"
@@ -79,9 +118,14 @@ sleep 10
 
 # Check topics
 echo "Checking for CDC topics in Kafka..."
-docker exec gibsey-kafka kafka-topics --bootstrap-server kafka:9092 --list | grep gibsey
+docker exec gibsey-kafka kafka-topics --bootstrap-server kafka:9092 --list | grep gibsey || echo "No gibsey topics found yet, events might take more time to flow through."
 
 echo 
 echo "=== CONNECTOR CREATION COMPLETE ==="
-echo "If you don't see CDC topics yet, wait a few more minutes as Debezium may still be initializing."
-echo "Check connector status with: curl -s http://localhost:8083/connectors/cassandra-connector/status"
+if [[ "$CONNECTOR_NAME" == "postgres-connector" ]]; then
+  echo "NOTE: Using PostgreSQL connector as a temporary solution."
+  echo "Run ./scripts/fix-debezium.sh to install the proper Cassandra connector."
+else
+  echo "Using the proper Cassandra connector."
+fi
+echo "Check connector status with: curl -s http://localhost:8083/connectors/$CONNECTOR_NAME/status"

@@ -24,8 +24,8 @@ if not KAFKA_BROKER:
     logger.error("KAFKA_BROKER environment variable not set.")
     exit(1)
 if not STARGATE_URL:
-    logger.error("STARGATE_URL environment variable not set.")
-    exit(1)
+    logger.warning("STARGATE_URL environment variable not set. Some functionality may be limited.")
+    STARGATE_URL = None  # Set to None so we can check later
 
 # Initialize Faust app
 app = App(
@@ -84,6 +84,10 @@ async def process_cdc_event(events):
 @app.task
 async def check_stargate_connection():
     """Check connection to Stargate API on startup."""
+    if not STARGATE_URL:
+        logger.info("Stargate URL not configured - skipping connection check")
+        return
+        
     stargate_token = os.getenv('STARGATE_AUTH_TOKEN') # <-- Read from environment
     try:
         headers = {
@@ -95,11 +99,13 @@ async def check_stargate_connection():
              headers["X-Cassandra-Token"] = stargate_token
              
         logger.info(f"Checking Stargate connection at {STARGATE_URL}/health")
-        response = requests.get(f"{STARGATE_URL}/health", headers=headers)
+        response = requests.get(f"{STARGATE_URL}/health", headers=headers, timeout=5)
         if response.status_code == 200:
             logger.info("Successfully connected to Stargate API")
         else:
             logger.warning(f"Could not connect to Stargate API: {response.status_code} - {response.text}")
+    except requests.exceptions.ConnectionError:
+        logger.warning(f"Could not connect to Stargate API at {STARGATE_URL} - service may not be running")
     except Exception as e:
         logger.error(f"Error connecting to Stargate API: {e}")
 

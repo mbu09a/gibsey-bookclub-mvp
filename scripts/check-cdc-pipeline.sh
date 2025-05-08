@@ -9,7 +9,7 @@ docker ps | grep -E 'gibsey-cassandra|gibsey-kafka|gibsey-debezium|gibsey-faust-
 
 # Step 2: Check Debezium API
 echo -e "\nStep 2: Checking Debezium API..."
-if curl -s http://localhost:8083/ | grep -q "Kafka Connect"; then
+if curl -s http://localhost:8083/ | grep -q "version"; then
   echo "✅ Debezium API is responding"
 else
   echo "❌ Debezium API is not responding"
@@ -48,13 +48,17 @@ echo "$TOPICS"
 
 # Step 7: Check Faust worker logs
 echo -e "\nStep 7: Checking Faust worker logs..."
-docker logs --tail 20 gibsey-faust-worker | grep -E "Received event|Operation|Table"
+docker logs --tail 20 gibsey-faust-worker | grep -E "Received event|Operation|Table|Stargate"
 
 echo
 echo "=== CDC PIPELINE REPORT ==="
-if [[ -z "$CONNECTORS" ]]; then
-  echo "No connectors are registered with Debezium."
-  echo "To create a connector, run: ./scripts/create-connector.sh"
+if [[ -z "$CONNECTORS" || "$CONNECTORS" == "[]" ]]; then
+  echo "❌ No connectors are registered with Debezium."
+  echo "Run the connector creation script:"
+  echo "    ./scripts/create-connector.sh"
+  echo
+  echo "If that fails, you may need to fix the Debezium setup first:"
+  echo "    ./scripts/fix-debezium.sh"
 else
   echo "Connector(s) registered: $CONNECTORS"
   
@@ -68,11 +72,15 @@ else
     echo "3. Debezium is having issues"
     echo
     echo "Check the connector status with:"
-    echo "curl -s http://localhost:8083/connectors/cassandra-connector/status"
+    echo "curl -s http://localhost:8083/connectors/postgres-connector/status"
   fi
 fi
 
 echo
-echo "If you need to set up the CDC pipeline, try these steps:"
+echo "If you need to set up the CDC pipeline, follow these steps:"
 echo "1. ./scripts/fix-debezium.sh    (Fixes the Debezium container setup)"
-echo "2. ./scripts/create-connector.sh (Creates and configures the Cassandra connector)"
+echo "2. ./scripts/create-connector.sh (Creates the temporary PostgreSQL connector)"
+echo
+echo "NOTE: This is a temporary setup with a PostgreSQL connector instead of"
+echo "the Cassandra connector. In production, you would need to download"
+echo "the correct Cassandra connector JAR file to the Debezium container."

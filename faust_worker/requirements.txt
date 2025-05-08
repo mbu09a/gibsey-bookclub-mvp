@@ -1,7 +1,6 @@
-faust-streaming>=0.10.0
+faust>=1.10.4
 aiohttp>=3.8.5
 python-dotenv>=1.0.0
 requests>=2.31.0
-# nomic-embed-text>=0.2.0 # Removed: Ollama model, not pip package
 numpy>=1.24.3
 faiss-cpu>=1.7.4
