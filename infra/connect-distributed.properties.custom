@@ -1,0 +1,3 @@
+# Custom properties to ensure plugin path is set
+# This will be copied and used by the custom start-connect.sh script
+plugin.path=/kafka/connect 

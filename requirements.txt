@@ -3,14 +3,14 @@ anyio==4.9.0
 bcrypt==4.3.0
 certifi==2025.4.26
 charset-normalizer==3.4.2
-click==8.1.8
+click
 dnspython==2.7.0
 email_validator==2.2.0
 exceptiongroup==1.2.2
 faiss-cpu==1.11.0
 fastapi==0.115.12
 fastapi-cli==0.0.7
-faust==1.10.4
+faust-streaming
 h11==0.16.0
 httpcore==1.0.9
 httptools==0.6.4
@@ -23,7 +23,6 @@ Markdown==3.8
 markdown-it-py==3.0.0
 MarkupSafe==3.0.2
 mdurl==0.1.2
-nomic-embed-text==0.2.0
 numpy==2.0.2
 orjson==3.10.18
 packaging==25.0

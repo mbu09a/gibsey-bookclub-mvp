@@ -12,4 +12,14 @@ gibsey.db
 
 # OS-specific files
 .DS_Store
-Thumbs.db 
+Thumbs.db
+
+# Large files / Extracted Archives
+*.tar.gz
+debezium-server/
+
+# Temporary Docker build files (if any)
+/tmp/kafka-connect-bridge/
+/tmp/standalone-fix/
+/tmp/fixed-debezium.Dockerfile
+/tmp/test-docker-compose.yml 
