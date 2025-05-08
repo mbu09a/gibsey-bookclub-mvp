@@ -1,5 +1,3 @@
-version: '3'
-
 services:
   # Cassandra database
   cassandra:
@@ -15,32 +13,6 @@ services:
       - cassandra_data:/var/lib/cassandra
     healthcheck:
       test: ["CMD", "cqlsh", "-u", "cassandra", "-p", "cassandra", "-e", "describe keyspaces"]
-      interval: 15s
-      timeout: 10s
-      retries: 10
-
-  # Stargate API for Cassandra
-  stargate:
-    image: stargateio/stargate-4_0:v2.0.6
-    container_name: gibsey-stargate
-    depends_on:
-      cassandra:
-        condition: service_healthy
-    ports:
-      - "8080:8080"  # REST API
-      - "8081:8081"  # GraphQL API
-      - "8082:8082"  # Document API
-      - "9043:9043"  # Auth port
-    environment:
-      - CLUSTER_NAME=GibseyCluster
-      - CLUSTER_VERSION=4.0
-      - CASSANDRA_CONTACT_POINTS=cassandra:9042
-      - CASSANDRA_USERNAME=cassandra
-      - CASSANDRA_PASSWORD=cassandra
-      - DEVELOPER_MODE=true
-      - ENABLE_AUTH=true
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8082/health"]
       interval: 15s
       timeout: 10s
       retries: 10
@@ -84,7 +56,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # Debezium for CDC (Change Data Capture)
+  # Debezium with Cassandra connector built in
   debezium:
     image: debezium/connect:2.4
     container_name: gibsey-debezium
@@ -96,36 +68,46 @@ services:
     ports:
       - "8083:8083"
     environment:
+      # Kafka Connect settings
+      BOOTSTRAP_SERVERS: kafka:9092
       GROUP_ID: gibsey-debezium-group
       CONFIG_STORAGE_TOPIC: gibsey_connect_configs
       OFFSET_STORAGE_TOPIC: gibsey_connect_offsets
       STATUS_STORAGE_TOPIC: gibsey_connect_statuses
-      BOOTSTRAP_SERVERS: kafka:9092
+      # Connector settings - simplified
       KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
       VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
-      KEY_CONVERTER_SCHEMAS_ENABLE: false
-      VALUE_CONVERTER_SCHEMAS_ENABLE: false
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8083/connectors"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      KEY_CONVERTER_SCHEMAS_ENABLE: "false"
+      VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
+    # Script to run after container starts
+    command: >
+      bash -c '
+        echo "Downloading Cassandra connector..." &&
+        mkdir -p /kafka/connect/debezium-connector-cassandra &&
+        curl -sLo /tmp/connector.jar https://repo1.maven.org/maven2/io/debezium/debezium-connector-cassandra-4/2.4.2.Final/debezium-connector-cassandra-4-2.4.2.Final-jar-with-dependencies.jar &&
+        mkdir -p /kafka/connect/debezium-connector-cassandra/META-INF/services &&
+        echo "io.debezium.connector.cassandra.CassandraConnector" > /kafka/connect/debezium-connector-cassandra/META-INF/services/org.apache.kafka.connect.source.SourceConnector &&
+        cp /tmp/connector.jar /kafka/connect/debezium-connector-cassandra/ &&
+        ls -la /kafka/connect/debezium-connector-cassandra/ &&
+        cat /kafka/connect/debezium-connector-cassandra/META-INF/services/org.apache.kafka.connect.source.SourceConnector &&
+        echo "Starting Kafka Connect..." &&
+        /docker-entrypoint.sh start'
 
   # Faust Worker - processes Kafka messages
   faust-worker:
     build:
-      context: ../faust_worker
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: faust_worker/Dockerfile
     container_name: gibsey-faust-worker
     volumes:
-      - ../faust_worker:/app
+      - ../faust_worker:/app:ro
     depends_on:
       kafka:
         condition: service_healthy
     environment:
       KAFKA_BROKER: kafka:9092
-      STARGATE_URL: http://stargate:8082
-      STARGATE_AUTH_TOKEN: ${STARGATE_AUTH_TOKEN}
+      # Optional since Stargate is not strictly needed for CDC
+      STARGATE_URL: http://cassandra:9042
     command: python app.py worker -l info
 
 volumes:
