@@ -1,5 +1,3 @@
-version: '3'
-
 services:
   # Cassandra database
   cassandra:
@@ -84,13 +82,12 @@ services:
       timeout: 5s
       retries: 5
 
-  # Debezium for CDC (Change Data Capture)
+  # Debezium for CDC (Change Data Capture) - Using existing files
   debezium:
     build:
       context: .
-      dockerfile: ./debezium.Dockerfile
+      dockerfile: infra/debezium.Dockerfile
     container_name: gibsey-debezium
-    restart: on-failure
     depends_on:
       kafka:
         condition: service_healthy
@@ -100,28 +97,27 @@ services:
       - "8083:8083"
     environment:
       # Kafka Connect settings
+      BOOTSTRAP_SERVERS: kafka:9092
       GROUP_ID: gibsey-debezium-group
       CONFIG_STORAGE_TOPIC: gibsey_connect_configs
       OFFSET_STORAGE_TOPIC: gibsey_connect_offsets
       STATUS_STORAGE_TOPIC: gibsey_connect_statuses
-      BOOTSTRAP_SERVERS: kafka:9092
       # Connector settings
-      KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
-      VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
-      KEY_CONVERTER_SCHEMAS_ENABLE: "false"
-      VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
+      CONNECT_KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_KEY_CONVERTER_SCHEMAS_ENABLE: "false"
+      CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
       # Plugin path setting - critical
       CONNECT_PLUGIN_PATH: /kafka/connect
       # Logging configuration for debugging
       CONNECT_LOG4J_ROOT_LOGLEVEL: INFO
       CONNECT_LOG4J_LOGGERS: "org.apache.kafka.connect.runtime.rest=WARN,org.reflections=ERROR,io.debezium=DEBUG"
-      # Force Connect to reload plugins at startup
-      CONNECT_PLUGIN_DISCOVERY_INITIAL_DELAY_MS: "10000"
-      CONNECT_PLUGIN_DISCOVERY_INTERVAL_MS: "10000"
+      # For debugging
+      CONNECT_DEBUG: "true"
     volumes:
       - debezium_logs:/kafka/logs
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8083/connectors"]
+      test: ["CMD", "curl", "-f", "http://localhost:8083/"]
       interval: 30s
       timeout: 10s
       retries: 10
@@ -130,11 +126,11 @@ services:
   # Faust Worker - processes Kafka messages
   faust-worker:
     build:
-      context: /Users/ghostradongus/Desktop/Gibsey Bookclub MVP
-      dockerfile: ./faust_worker/Dockerfile
+      context: .
+      dockerfile: faust_worker/Dockerfile
     container_name: gibsey-faust-worker
     volumes:
-      - ../faust_worker:/app
+      - ./faust_worker:/app
     depends_on:
       kafka:
         condition: service_healthy

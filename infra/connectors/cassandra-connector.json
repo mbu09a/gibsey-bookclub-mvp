@@ -1,0 +1,14 @@
+{
+  "name": "cassandra-connector",
+  "config": {
+    "connector.class": "io.debezium.connector.cassandra.CassandraConnector",
+    "tasks.max": "1",
+    "cassandra.hosts": "cassandra",
+    "cassandra.port": "9042",
+    "cassandra.username": "cassandra",
+    "cassandra.password": "cassandra",
+    "cassandra.keyspace": "gibsey",
+    "topic.prefix": "gibsey",
+    "snapshot.mode": "initial"
+  }
+}
