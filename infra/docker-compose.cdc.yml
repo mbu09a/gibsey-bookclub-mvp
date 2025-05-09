@@ -1,5 +1,3 @@
-version: '3'
-
 services:
   # Cassandra database
   cassandra:
@@ -87,8 +85,8 @@ services:
   # Debezium for CDC (Change Data Capture) - Using existing files
   debezium:
     build:
-      context: .
-      dockerfile: infra/debezium.Dockerfile
+      context: ..
+      dockerfile: ./infra/debezium.Dockerfile
     container_name: gibsey-debezium
     depends_on:
       kafka:
@@ -100,7 +98,7 @@ services:
     environment:
       # Kafka Connect settings
       BOOTSTRAP_SERVERS: kafka:9092
-      GROUP_ID: gibsey-debezium-group
+      GROUP_ID: gibsey-connect-group
       CONFIG_STORAGE_TOPIC: gibsey_connect_configs
       OFFSET_STORAGE_TOPIC: gibsey_connect_offsets
       STATUS_STORAGE_TOPIC: gibsey_connect_statuses
@@ -111,36 +109,38 @@ services:
       CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
       # Plugin path setting - critical
       CONNECT_PLUGIN_PATH: /kafka/connect
+      # Properly set group ID that gets added to the config 
+      CONNECT_GROUP_ID: gibsey-connect-group
       # Logging configuration for debugging
       CONNECT_LOG4J_ROOT_LOGLEVEL: INFO
-      CONNECT_LOG4J_LOGGERS: "org.apache.kafka.connect.runtime.rest=WARN,org.reflections=ERROR,io.debezium=DEBUG"
+      CONNECT_LOG4J_LOGGERS: org.apache.kafka.connect.runtime.rest=WARN,org.reflections=ERROR,io.debezium=DEBUG
       # For debugging
       CONNECT_DEBUG: "true"
     volumes:
       - debezium_logs:/kafka/logs
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8083/"]
-      interval: 30s
-      timeout: 10s
+      test: ["CMD", "/healthcheck.sh"]
+      interval: 10s
+      timeout: 5s
       retries: 10
-      start_period: 60s
+      start_period: 30s
 
   # Faust Worker - processes Kafka messages
   faust-worker:
     build:
-      context: .
-      dockerfile: faust_worker/Dockerfile
+      context: ../faust_worker
+      dockerfile: Dockerfile
     container_name: gibsey-faust-worker
     volumes:
-      - ./faust_worker:/app
+      - ../faust_worker:/app
     depends_on:
       kafka:
         condition: service_healthy
     environment:
       KAFKA_BROKER: kafka:9092
       STARGATE_URL: http://stargate:8082
-      STARGATE_AUTH_TOKEN: ${STARGATE_AUTH_TOKEN}
-    command: python app.py worker -l info
+      STARGATE_AUTH_TOKEN: ${STARGATE_AUTH_TOKEN:-}
+    command: python simple_consumer.py
 
 volumes:
   cassandra_data:

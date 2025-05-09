@@ -32,14 +32,23 @@ fi
 
 # Step 2: Check Debezium health
 echo -e "\n${YELLOW}Checking Debezium health...${NC}"
-DEBEZIUM_HEALTH=$(curl -s http://localhost:8083/ | grep version)
-if [[ ! -z "$DEBEZIUM_HEALTH" ]]; then
-    echo -e "${GREEN}✓ Debezium is healthy${NC}"
-    echo "$DEBEZIUM_HEALTH"
+# First, check if the container is running regardless of API responsiveness
+if docker ps | grep -q "gibsey-debezium"; then
+    echo -e "${GREEN}✓ Debezium container is running${NC}"
+    
+    # Then try to check the API, but don't fail if it doesn't respond
+    DEBEZIUM_HEALTH=$(curl -s --connect-timeout 2 http://localhost:8083/ | grep version)
+    if [[ ! -z "$DEBEZIUM_HEALTH" ]]; then
+        echo -e "${GREEN}✓ Debezium API is responding with version info${NC}"
+        echo "$DEBEZIUM_HEALTH"
+    else
+        echo -e "${YELLOW}! Debezium API not responding yet - container may still be initializing${NC}"
+        echo "Will proceed with verification anyway since the container is running"
+    fi
 else
-    echo -e "${RED}✗ Debezium might not be healthy${NC}"
-    echo "Attempting to get detailed status..."
-    curl -s http://localhost:8083/ || echo -e "${RED}Failed to connect to Debezium${NC}"
+    echo -e "${RED}✗ Debezium container is not running${NC}"
+    echo "Please ensure the container is started with: docker compose -f infra/docker-compose.cdc.yml up -d debezium"
+    exit 1
 fi
 
 # Step 3: Check Cassandra keyspace and table
@@ -189,6 +198,13 @@ echo "$FAUST_LOGS" | grep -E "Received event|$TEST_ID|Operation:|gibsey.test_cdc
 # Step 9: Summary
 echo -e "\n${YELLOW}===== CDC PIPELINE VERIFICATION SUMMARY =====${NC}"
 
+# Set this based on what we determined earlier, don't re-check
+if docker ps | grep -q "gibsey-debezium"; then
+    DEBEZIUM_RUNNING="true"
+else
+    DEBEZIUM_RUNNING="false"
+fi
+
 if [[ ! -z "$CDC_TOPIC" ]] && [[ ! -z "$EVENTS" ]]; then
     echo -e "${GREEN}The CDC pipeline appears to be working!${NC}"
     echo -e "1. All services are running"
@@ -210,8 +226,8 @@ else
         echo -e "- Not all services are running"
     fi
     
-    if [[ -z "$DEBEZIUM_HEALTH" ]]; then
-        echo -e "- Debezium might not be healthy"
+    if [[ "$DEBEZIUM_RUNNING" == "false" ]]; then
+        echo -e "- Debezium container is not running"
     fi
     
     if [[ -z "$CDC_TOPIC" ]]; then

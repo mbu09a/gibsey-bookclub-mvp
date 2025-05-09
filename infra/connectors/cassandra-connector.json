@@ -1,7 +1,7 @@
 {
   "name": "cassandra-connector",
   "config": {
-    "connector.class": "io.debezium.connector.cassandra.CassandraConnector",
+    "connector.class": "io.debezium.connector.cassandra.Cassandra4Connector",
     "tasks.max": "1",
     "cassandra.hosts": "cassandra",
     "cassandra.port": "9042",
@@ -9,7 +9,7 @@
     "cassandra.password": "cassandra",
     "cassandra.keyspace": "gibsey",
     "topic.prefix": "gibsey",
-    "table.include.list": "gibsey.pages",
+    "table.include.list": "gibsey.test_cdc",
     "snapshot.mode": "initial",
     "errors.log.enable": "true",
     "errors.log.include.messages": "true"
