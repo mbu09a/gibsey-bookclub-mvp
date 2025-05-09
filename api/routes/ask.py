@@ -2,6 +2,7 @@ import sqlite3 # For type hinting Connection
 from fastapi import APIRouter, Depends, Body, HTTPException, status
 from typing import Dict, Any, List
 import requests
+import httpx
 import numpy as np
 import faiss
 import pickle
@@ -117,36 +118,57 @@ async def ask_question(
     db: sqlite3.Connection = Depends(get_db)
 ):
     user_query = payload.get("query", "")
+    char_id = payload.get("char_id", "")
+    text = payload.get("text", "")
     user_id = current_user.get("id")
-
-    if not faiss_index or not PAGES_DICT:
-        raise HTTPException(status_code=503, detail="Search index or page data not available.")
-
-    if not user_query:
+    
+    # Use text if provided, otherwise use query
+    query_text = text or user_query
+    
+    if not query_text:
         raise HTTPException(status_code=400, detail="Query cannot be empty.")
 
     try:
-        # 1. Embed the user query
-        query_vector = embed_text(user_query)
+        # Get relevant quotes from Memory RAG service
+        resp = httpx.get("http://localhost:8001/retrieve", params={"q": query_text, "k": 4})
+        if resp.status_code != 200:
+            raise HTTPException(status_code=503, detail="Could not connect to Memory RAG service.")
+            
+        retrieved_quotes = resp.json()
         
-        # 2. Find relevant page IDs
-        top_k = 3
-        relevant_page_ids = find_top_pages(query_vector, k=top_k)
-        
-        # 3. Build context from pages
-        context = "\n\n".join(
-            f"[Page {pid}]\n{PAGES_DICT[pid]['text']}" 
-            for pid in relevant_page_ids 
-            if pid in PAGES_DICT
-        )
+        # Format quotes for context
+        quotes = [f"- {row['quote']} (p.{row['page_id']})" for row in retrieved_quotes]
+        context = "\n".join(quotes)
         
         if not context:
-            print(f"No relevant context found for query: '{user_query}'")
+            print(f"No relevant context found for query: '{query_text}'")
             final_answer = "I couldn't find any relevant passages in the text to answer that question."
         else:
-            # 4. Generate answer using LLM
-            print(f"Generating answer for query: '{user_query}' with context from pages: {relevant_page_ids}")
-            final_answer = generate_answer(user_query, context)
+            # Generate answer using LLM with the quotes as context
+            print(f"Generating answer for query: '{query_text}' with {len(quotes)} quotes")
+            
+            # Build prompt with quotes
+            prompt = f"""Based on the following excerpts from 'The Entrance Way', answer the user's question. 
+Use the provided quotes to ground your answer. If you cite information, include the page number in parentheses.
+
+Relevant Quotes:
+{context}
+
+User Question: {query_text}
+
+Answer:"""
+            
+            # Call Ollama for generation
+            response = requests.post(
+                f"{OLLAMA_API}/generate", 
+                json={
+                    "model": GENERATION_MODEL,
+                    "prompt": prompt,
+                    "stream": False # Get the full response at once
+                }
+            )
+            response.raise_for_status()
+            final_answer = response.json().get("response", "Error: Could not get generated response from Ollama.")
 
         # Award credit
         new_balance = current_user.get('credits', 0)
@@ -159,11 +181,35 @@ async def ask_question(
 
         return {
             "answer": final_answer,
-            "citations": relevant_page_ids, # Return the IDs of pages used for context
+            "citations": [quote['page_id'] for quote in retrieved_quotes], 
             "credits": new_balance 
         }
 
     except Exception as e:
-        print(f"Error during /ask for query '{user_query}': {e}")
+        print(f"Error during /ask for query '{query_text}': {e}")
         # Consider more specific error handling based on where exception occurred (embedding, search, generation)
-        raise HTTPException(status_code=500, detail=f"An error occurred processing your request: {e}") 
+        raise HTTPException(status_code=500, detail=f"An error occurred processing your request: {e}")
+
+@router.get("/test-rag", response_model=Dict[str, Any])
+async def test_rag_integration(query: str = "Why is the entrance way spiral-shaped?"):
+    """Test endpoint for Memory RAG integration without authentication"""
+    try:
+        # Get relevant quotes from Memory RAG service
+        resp = httpx.get("http://localhost:8001/retrieve", params={"q": query, "k": 4})
+        if resp.status_code != 200:
+            return {"error": f"Could not connect to Memory RAG service: {resp.status_code}"}
+            
+        retrieved_quotes = resp.json()
+        
+        # Format quotes for context
+        quotes = [f"- {row['quote']} (p.{row['page_id']})" for row in retrieved_quotes]
+        context = "\n".join(quotes)
+        
+        return {
+            "success": True,
+            "quotes": retrieved_quotes,
+            "context": context
+        }
+
+    except Exception as e:
+        return {"error": f"Error during test: {str(e)}"} 

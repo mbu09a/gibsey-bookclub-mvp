@@ -1,0 +1,25 @@
+# Memory RAG Service Dependencies
+
+# FastAPI and server
+fastapi==0.111.0
+uvicorn==0.29.0
+pydantic==2.5.3
+
+# FAISS vector index
+faiss-cpu==1.7.4
+numpy==1.24.3
+
+# HTTP client for external APIs
+httpx==0.27.0
+
+# Environment variables
+python-dotenv==1.0.1
+
+# Prometheus metrics
+prometheus-fastapi-instrumentator==6.1.0
+
+# Type hints
+typing-extensions>=4.8.0
+
+# Logging enhancement (optional)
+rich>=13.6.0

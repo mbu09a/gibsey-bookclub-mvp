@@ -140,8 +140,54 @@ services:
       KAFKA_BROKER: kafka:9092
       STARGATE_URL: http://stargate:8082
       STARGATE_AUTH_TOKEN: ${STARGATE_AUTH_TOKEN:-}
+      RAG_REFRESH_URL: http://memory_rag:8001
     command: python simple_consumer.py
+
+  # Embedding Consumer - processes CDC events and creates embeddings
+  embedding-consumer:
+    build:
+      context: ../scripts
+      dockerfile: Dockerfile
+    container_name: gibsey-embedding-consumer
+    volumes:
+      - ../scripts:/app
+    depends_on:
+      kafka:
+        condition: service_healthy
+      stargate:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER: kafka:9092
+      STARGATE_URL: http://stargate:8080
+      OLLAMA_URL: http://ollama:11434
+      RAG_REFRESH_URL: http://memory_rag:8001
+    command: python kafka_embedding_consumer.py --refresh-memory-rag
+
+  # Memory RAG service
+  memory_rag:
+    build: 
+      context: ../memory_rag
+    image: gibsey-memory-rag
+    container_name: gibsey-memory-rag
+    environment:
+      - STARGATE_URL=http://stargate:8080
+      - OLLAMA_URL=http://ollama:11434
+    depends_on: 
+      - stargate
+    ports: 
+      - "8001:8001"
+
+  # Ollama for embeddings and generation
+  ollama:
+    image: ollama/ollama:latest
+    container_name: gibsey-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    command: serve
 
 volumes:
   cassandra_data:
   debezium_logs:
+  ollama_data:

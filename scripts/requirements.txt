@@ -1,0 +1,11 @@
+# Kafka dependencies
+confluent-kafka>=2.0.0
+
+# Utility packages
+python-dotenv>=0.19.2
+tenacity>=8.0.1
+requests>=2.28.1
+numpy>=1.23.0
+
+# For embedding generation
+httpx>=0.23.0 
