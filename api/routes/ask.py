@@ -140,6 +140,18 @@ async def ask_question(
         quotes = [f"- {row['quote']} (p.{row['page_id']})" for row in retrieved_quotes]
         context = "\n".join(quotes)
         
+        # Glossary fallback for "What is Gibsey?" queries when no passages found
+        if not quotes and 'gibsey' in query_text.lower():
+            try:
+                g_resp = httpx.get(f"http://localhost:8080/v2/keyspaces/gibsey/glossary/Gibsey")
+                if g_resp.status_code == 200:
+                    g = g_resp.json()
+                    quotes = [f"- {g['definition']} (Glossary)"]
+                    context = "\n".join(quotes)
+                    print(f"Using glossary fallback for 'Gibsey' query")
+            except Exception as e:
+                print(f"Error fetching glossary entry: {e}")
+        
         if not context:
             print(f"No relevant context found for query: '{query_text}'")
             final_answer = "I couldn't find any relevant passages in the text to answer that question."
