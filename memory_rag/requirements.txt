@@ -23,3 +23,7 @@ typing-extensions>=4.8.0
 
 # Logging enhancement (optional)
 rich>=13.6.0
+
+# Cross-encoder reranker
+sentence-transformers==2.7.0
+torch>=2.1.0

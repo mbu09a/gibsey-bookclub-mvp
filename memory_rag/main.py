@@ -4,6 +4,11 @@ Memory RAG FastAPI service
 This service provides semantic retrieval over book pages using FAISS vector search and
 embedding-based retrieval. It loads vectors from Stargate, maintains a FAISS index in memory,
 and responds to queries with relevant page quotes.
+
+Features:
+- Vector similarity search with FAISS
+- Cross-encoder reranking for improved relevance
+- Paragraph-level retrieval for precise answers
 """
 from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -22,7 +27,9 @@ from datetime import datetime
 # Local imports
 from indexer import vector_index
 from slice_logic import extract_relevant_quotes
+from reranker import reranker
 from prometheus_fastapi_instrumentator import Instrumentator
+from prometheus_client import Gauge
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -35,6 +42,8 @@ OLLAMA_URL = os.getenv("OLLAMA_URL", "http://ollama:11434")
 EMBED_MODEL = os.getenv("EMBED_MODEL", "nomic-embed-text")
 VERSION = os.getenv("VERSION", "1.0.0")
 SERVICE_NAME = "memory-rag"
+USE_RERANKER = os.getenv("RERANKER", "on").lower() in ("on", "true", "1", "yes")
+FAISS_CANDIDATES = int(os.getenv("FAISS_CANDIDATES", "30"))  # Number of candidates to fetch from FAISS for reranking
 
 # Embedding URL derived from OLLAMA_URL
 EMBED_URL = f"{OLLAMA_URL}/api/embeddings"
@@ -57,6 +66,20 @@ app.add_middleware(
 
 # Add metrics endpoint via Prometheus instrumentator
 Instrumentator().instrument(app).expose(app)
+
+# Add custom Prometheus metrics for reranker
+reranker_latency = Gauge(
+    "memory_rag_reranker_latency_seconds",
+    "Latency of cross-encoder reranking in seconds"
+)
+reranker_calls = Gauge(
+    "memory_rag_reranker_calls_total",
+    "Total number of reranker calls"
+)
+reranker_candidates = Gauge(
+    "memory_rag_reranker_candidates_count",
+    "Number of candidates processed by reranker"
+)
 
 # Request/response models
 class RefreshBody(BaseModel):
@@ -105,6 +128,10 @@ class StatsResponse(BaseModel):
     unique_page_ids: int
     last_updated: str
     uptime_seconds: float
+    reranker_enabled: bool
+    reranker_model: Optional[str]
+    reranker_device: Optional[str]
+    reranker_latency: Optional[float]
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -115,7 +142,11 @@ class StatsResponse(BaseModel):
                 "memory_usage_bytes": 2179200,
                 "unique_page_ids": 710,
                 "last_updated": "2023-09-22T15:30:45.123456",
-                "uptime_seconds": 3600.5
+                "uptime_seconds": 3600.5,
+                "reranker_enabled": True,
+                "reranker_model": "sentence-transformers/ms-marco-MiniLM-L-6-v2",
+                "reranker_device": "cpu",
+                "reranker_latency": 0.15
             }
         }
     )
@@ -249,15 +280,16 @@ async def retrieve(
     # 1. Generate embedding for the query
     query_vector = await embed_text(q)
 
-    # 2. Search for similar vectors
-    similar_pages = vector_index.search(query_vector, k)
+    # 2. Search for similar vectors (get more candidates than needed for reranking)
+    candidates_to_fetch = FAISS_CANDIDATES if USE_RERANKER else k
+    similar_pages = vector_index.search(query_vector, min(candidates_to_fetch, 50))  # Limit to 50 max
 
     if not similar_pages:
         logger.warning(f"No matching pages found for query: {q}")
         return []
 
     # 3. Fetch the content of matching pages
-    results = []
+    candidates = []
     for page_id, score in similar_pages:
         try:
             # Fetch page content from Stargate
@@ -270,7 +302,7 @@ async def retrieve(
 
             if quotes:
                 best_quote = quotes[0]  # Get the highest scoring quote
-                results.append({
+                candidates.append({
                     "page_id": page_id,
                     "quote": best_quote["quote"],
                     "score": best_quote["score"],
@@ -278,6 +310,31 @@ async def retrieve(
                 })
         except Exception as e:
             logger.error(f"Error processing page {page_id}: {e}")
+
+    # 5. Apply cross-encoder reranking if enabled
+    rerank_start = time.time()
+    if USE_RERANKER and candidates:
+        try:
+            logger.info(f"Reranking {len(candidates)} candidates using cross-encoder")
+            reranker_candidates.set(len(candidates))
+
+            # Rerank candidates using the cross-encoder
+            results = reranker.rerank(q, candidates, top_k=k)
+
+            # Update Prometheus metrics
+            rerank_metrics = reranker.get_metrics()
+            reranker_latency.set(rerank_metrics["rerank_latency_seconds"])
+            reranker_calls.set(rerank_metrics["rerank_call_count"])
+
+            rerank_time = time.time() - rerank_start
+            logger.info(f"Reranking completed in {rerank_time:.3f}s")
+        except Exception as e:
+            # Fallback to vector similarity results on error
+            logger.error(f"Reranking failed, using vector similarity results: {e}")
+            results = sorted(candidates, key=lambda x: x["score"], reverse=True)[:k]
+    else:
+        # No reranking, just sort by vector similarity score
+        results = sorted(candidates, key=lambda x: x["score"], reverse=True)[:k]
 
     # Log performance metrics
     elapsed = time.time() - start
@@ -287,15 +344,23 @@ async def retrieve(
 
 @app.get("/stats", response_model=StatsResponse,
         summary="Get index statistics",
-        description="Returns statistics about the FAISS vector index")
+        description="Returns statistics about the FAISS vector index and reranker")
 async def stats():
-    """Get statistics about the vector index."""
+    """Get statistics about the vector index and reranker."""
     global start_time, last_updated
     uptime = time.time() - start_time
 
+    # Get vector index stats
     stats = vector_index.get_stats()
     stats["last_updated"] = last_updated
     stats["uptime_seconds"] = uptime
+
+    # Add reranker stats
+    rerank_metrics = reranker.get_metrics()
+    stats["reranker_enabled"] = rerank_metrics["reranker_enabled"]
+    stats["reranker_model"] = rerank_metrics["model_name"] if rerank_metrics["reranker_initialized"] else None
+    stats["reranker_device"] = rerank_metrics["device"] if rerank_metrics["reranker_initialized"] else None
+    stats["reranker_latency"] = rerank_metrics["rerank_latency_seconds"] if rerank_metrics["rerank_call_count"] > 0 else None
 
     return stats
 
@@ -330,8 +395,20 @@ async def health():
     global start_time
     uptime = time.time() - start_time
 
+    # Check vector index health
     index_size = vector_index.index.ntotal
-    status = "healthy" if index_size > 0 else "degraded"
+
+    # Check reranker health
+    rerank_metrics = reranker.get_metrics()
+    reranker_healthy = not USE_RERANKER or (USE_RERANKER and rerank_metrics["reranker_initialized"])
+
+    # Determine overall status
+    if index_size > 0 and reranker_healthy:
+        status = "healthy"
+    elif index_size > 0:
+        status = "degraded"  # Index OK but reranker issue
+    else:
+        status = "unhealthy"  # No index data
 
     return JSONResponse(
         status_code=200 if status == "healthy" else 207,
@@ -339,7 +416,9 @@ async def health():
             "status": status,
             "index_size": index_size,
             "uptime": uptime,
-            "last_updated": last_updated
+            "last_updated": last_updated,
+            "reranker_enabled": USE_RERANKER,
+            "reranker_initialized": rerank_metrics["reranker_initialized"] if USE_RERANKER else None
         }
     )
 
