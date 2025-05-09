@@ -231,14 +231,14 @@ async def refresh(row: RefreshBody):
         description="Embeds the query text, finds semantically similar vectors, and returns relevant quotes")
 async def retrieve(
     q: str = Query(..., description="The search query", min_length=2),
-    k: int = Query(4, description="Number of results to return", ge=1, le=10)
+    k: int = Query(12, description="Number of results to return", ge=1, le=20)
 ):
     """
     Retrieve the most relevant quotes from pages matching the query.
 
     Args:
         q: The query text
-        k: Number of results to return (default: 4)
+        k: Number of results to return (default: 12)
 
     Returns:
         List of page_id/quote pairs sorted by relevance

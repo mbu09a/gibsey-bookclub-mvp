@@ -14,9 +14,9 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(level
 logger = logging.getLogger(__name__)
 
 # Constants
-MAX_WORDS = 40  # Maximum number of words in a quote
+MAX_WORDS = 60  # Maximum number of words in a quote
 MIN_WORDS = 10  # Minimum number of words in a quote for it to be considered valid
-MAX_QUOTE_CHARS = 240  # Maximum characters in a quote (for display purposes)
+MAX_QUOTE_CHARS = 360  # Maximum characters in a quote (for display purposes)
 
 def tokenize_text(text: str) -> List[str]:
     """
